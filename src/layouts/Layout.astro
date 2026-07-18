@@ -1,0 +1,39 @@
+---
+import "@/styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = "Helmport — Homelab dashboard",
+  description = "View and manage your homelab Docker containers, resources and disks.",
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title}</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    {/* No-flash theme: apply stored preference before first paint. */}
+    <script is:inline>
+      (function () {
+        try {
+          var stored = localStorage.getItem("helmport-theme");
+          var dark = stored ? stored === "dark" : true;
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="min-h-dvh">
+    <slot />
+  </body>
+</html>

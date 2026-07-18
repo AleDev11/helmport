@@ -1,0 +1,81 @@
+name: helmport
+
+services:
+  # --------------------------------------------------------------------------
+  # Least-privilege Docker API gateway. The app NEVER touches the raw socket;
+  # it talks to this proxy, which only exposes the endpoints we enable below.
+  # The proxy is reachable only on the internal network (no host port).
+  # --------------------------------------------------------------------------
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: helmport-socket-proxy
+    restart: unless-stopped
+    environment:
+      # Allowed (read):
+      CONTAINERS: 1 # list / inspect / stats
+      INFO: 1 # daemon summary
+      VERSION: 1 # server version
+      SYSTEM: 1 # /system/df (disk usage)
+      PING: 1 # health
+      # Allowed (write) — needed for start / stop / restart:
+      POST: 1
+      # Everything else stays denied (exec, images, volumes, networks,
+      # secrets, swarm, build, …) — defaults to 0.
+      EXEC: 0
+      IMAGES: 0
+      VOLUMES: 0
+      NETWORKS: 0
+      BUILD: 0
+      COMMIT: 0
+      CONFIGS: 0
+      SECRETS: 0
+      SWARM: 0
+      SERVICES: 0
+      TASKS: 0
+      NODES: 0
+      PLUGINS: 0
+      SESSION: 0
+      AUTH: 0
+      DISTRIBUTION: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs:
+      - /run
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+
+  # --------------------------------------------------------------------------
+  # The Helmport web app (Astro SSR on Bun).
+  # Bound to localhost only — put it behind your reverse proxy / Cloudflare
+  # Tunnel + Access for authentication before exposing it publicly.
+  # --------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: helmport:latest
+    container_name: helmport
+    restart: unless-stopped
+    depends_on:
+      - socket-proxy
+    environment:
+      HELMPORT_DOCKER_HOST: socket-proxy
+      HELMPORT_DOCKER_PORT: 2375
+      HOST: 0.0.0.0
+      PORT: 4321
+    ports:
+      # host:container — bound to loopback; expose via your tunnel/proxy.
+      - "127.0.0.1:${HELMPORT_PORT:-8087}:4321"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
