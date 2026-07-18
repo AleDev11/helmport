@@ -2,12 +2,16 @@ import Docker from "dockerode";
 import type {
   ActionResult,
   ContainerAction,
+  ContainerDetail,
   ContainerState,
   ContainerStats,
   ContainerSummary,
   DiskUsage,
   HealthStatus,
   HostInfo,
+  LogLine,
+  MountInfo,
+  NetworkAttachment,
   PortMapping,
 } from "./types";
 import { cleanName, shortImage } from "./format";
@@ -218,6 +222,151 @@ export async function getDiskUsage(): Promise<DiskUsage> {
 
   const totalSize = imagesSize + containersSize + volumesSize + buildCacheSize;
   return { imagesSize, containersSize, volumesSize, buildCacheSize, totalSize, reclaimable };
+}
+
+/** Detailed, sanitized inspect for a single container. */
+export async function inspectContainer(id: string): Promise<ContainerDetail | null> {
+  try {
+    const info = await docker.getContainer(id).inspect();
+    const labels = info.Config?.Labels ?? {};
+    const state = normalizeState(info.State?.Status ?? "exited");
+
+    const ports: PortMapping[] = [];
+    const portBindings = info.NetworkSettings?.Ports ?? {};
+    for (const [key, binds] of Object.entries(portBindings)) {
+      const [priv, type] = key.split("/");
+      if (binds && binds.length) {
+        for (const b of binds) {
+          ports.push({
+            ip: b.HostIp,
+            privatePort: Number(priv),
+            publicPort: Number(b.HostPort),
+            type: type ?? "tcp",
+          });
+        }
+      } else {
+        ports.push({ privatePort: Number(priv), type: type ?? "tcp" });
+      }
+    }
+
+    const mounts: MountInfo[] = (info.Mounts ?? []).map((m) => ({
+      type: m.Type ?? "bind",
+      name: m.Name ?? null,
+      source: m.Source ?? "",
+      destination: m.Destination ?? "",
+      mode: m.Mode ?? "",
+      rw: m.RW ?? true,
+    }));
+
+    const networks: NetworkAttachment[] = Object.entries(
+      info.NetworkSettings?.Networks ?? {},
+    ).map(([name, n]) => ({
+      name,
+      ipAddress: n.IPAddress ?? "",
+      gateway: n.Gateway ?? "",
+      macAddress: n.MacAddress ?? "",
+      aliases: n.Aliases ?? [],
+    }));
+
+    // Env: expose keys, mask values (never leak secrets to the browser).
+    const env = (info.Config?.Env ?? []).map((e) => {
+      const idx = e.indexOf("=");
+      const key = idx >= 0 ? e.slice(0, idx) : e;
+      const value = idx >= 0 ? e.slice(idx + 1) : "";
+      return { key, masked: value ? "••••••••" : "" };
+    });
+
+    const composeFiles = (labels["com.docker.compose.project.config_files"] ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    return {
+      id: info.Id,
+      name: cleanName(info.Name ?? id.slice(0, 12)),
+      image: info.Config?.Image ?? "",
+      imageShort: shortImage(info.Config?.Image ?? ""),
+      state,
+      status: info.State?.Status ?? "",
+      health: normalizeHealth(
+        info.State?.Health?.Status ? `(${info.State.Health.Status})` : undefined,
+      ),
+      createdAt: Date.parse(info.Created ?? "") / 1000 || 0,
+      startedAt: info.State?.StartedAt ?? null,
+      ports: ports.sort((a, b) => (a.publicPort ?? 0) - (b.publicPort ?? 0)),
+      project: labels["com.docker.compose.project"] ?? null,
+      service: labels["com.docker.compose.service"] ?? null,
+      restartCount: info.RestartCount ?? 0,
+      command: [info.Path, ...(info.Args ?? [])].filter(Boolean).join(" "),
+      restartPolicy: info.HostConfig?.RestartPolicy?.Name || "no",
+      env,
+      labels: Object.entries(labels).map(([key, value]) => ({ key, value })),
+      mounts,
+      networks,
+      composeFiles,
+      workingDir: info.Config?.WorkingDir ?? "",
+      logPath: info.LogPath ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Parse Docker's multiplexed log stream buffer into typed lines. */
+function parseLogBuffer(buf: Buffer): LogLine[] {
+  const lines: LogLine[] = [];
+  const pushRaw = (stream: LogLine["stream"], raw: string) => {
+    for (const part of raw.split("\n")) {
+      if (!part) continue;
+      const sp = part.indexOf(" ");
+      const maybeTs = sp > 0 ? part.slice(0, sp) : "";
+      const isTs = /^\d{4}-\d{2}-\d{2}T/.test(maybeTs);
+      lines.push({
+        stream,
+        timestamp: isTs ? maybeTs : "",
+        text: isTs ? part.slice(sp + 1) : part,
+      });
+    }
+  };
+
+  // Multiplexed frames have an 8-byte header: [type,0,0,0, len(4 BE)].
+  let offset = 0;
+  let looksMultiplexed = true;
+  while (offset + 8 <= buf.length) {
+    const type = buf[offset];
+    if (type !== 1 && type !== 2) {
+      looksMultiplexed = false;
+      break;
+    }
+    const len = buf.readUInt32BE(offset + 4);
+    if (offset + 8 + len > buf.length) {
+      looksMultiplexed = false;
+      break;
+    }
+    const payload = buf.toString("utf8", offset + 8, offset + 8 + len);
+    pushRaw(type === 2 ? "stderr" : "stdout", payload);
+    offset += 8 + len;
+  }
+
+  if (!looksMultiplexed || lines.length === 0) {
+    // TTY / raw stream: treat the whole buffer as text.
+    lines.length = 0;
+    pushRaw("stdout", buf.toString("utf8"));
+  }
+  return lines;
+}
+
+/** Fetch the last `tail` log lines for a container. */
+export async function getLogs(id: string, tail = 400): Promise<LogLine[]> {
+  const container = docker.getContainer(id);
+  const buf = (await container.logs({
+    follow: false,
+    stdout: true,
+    stderr: true,
+    tail: Math.max(1, Math.min(tail, 2000)),
+    timestamps: true,
+  })) as unknown as Buffer;
+  return parseLogBuffer(Buffer.isBuffer(buf) ? buf : Buffer.from(buf));
 }
 
 const ALLOWED_ACTIONS: ContainerAction[] = ["start", "stop", "restart"];

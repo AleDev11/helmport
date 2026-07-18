@@ -32,6 +32,7 @@ interface Props {
   stats?: ContainerStats;
   pending: ContainerAction | null;
   onAction: (id: string, action: ContainerAction) => void;
+  onOpen: (container: ContainerSummary) => void;
 }
 
 const HEALTH_LABEL: Record<string, { text: string; variant: "success" | "destructive" | "warning" }> = {
@@ -40,7 +41,7 @@ const HEALTH_LABEL: Record<string, { text: string; variant: "success" | "destruc
   starting: { text: "starting", variant: "warning" },
 };
 
-export function ContainerCard({ container, stats, pending, onAction }: Props) {
+export function ContainerCard({ container, stats, pending, onAction, onOpen }: Props) {
   const [open, setOpen] = useState(false);
   const running = container.state === "running";
   const busy = pending !== null;
@@ -52,9 +53,18 @@ export function ContainerCard({ container, stats, pending, onAction }: Props) {
 
   return (
     <Card
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(container)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(container);
+        }
+      }}
       className={cn(
-        "group relative gap-0 overflow-hidden p-4 transition-colors",
-        "hover:border-primary/40",
+        "group relative cursor-pointer gap-0 overflow-hidden p-4 transition-colors",
+        "hover:border-primary/40 focus-visible:border-primary focus-visible:ring-ring/40 focus-visible:ring-[3px] focus-visible:outline-none",
         !running && "opacity-90",
       )}
     >
@@ -80,6 +90,7 @@ export function ContainerCard({ container, stats, pending, onAction }: Props) {
               className="text-muted-foreground -mr-1 -mt-1"
               aria-label={`Actions for ${container.name}`}
               disabled={busy}
+              onClick={(e) => e.stopPropagation()}
             >
               {busy ? <Loader2 className="animate-spin" /> : <MoreVertical />}
             </Button>

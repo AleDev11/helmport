@@ -7,9 +7,11 @@ import { StatTile } from "./StatTile";
 import { DiskPanel } from "./DiskPanel";
 import { ContainerCard } from "./ContainerCard";
 import { ContainerCardSkeleton } from "./Skeletons";
+import { ContainerDetail } from "./ContainerDetail";
+import { FilterBar, type StateFilter } from "./FilterBar";
 import { Toaster, type Toast } from "./Toaster";
 import { fetchOverview, fetchStats, runAction, type Overview } from "./api";
-import type { ContainerAction, ContainerStats } from "@/lib/types";
+import type { ContainerAction, ContainerStats, ContainerSummary } from "@/lib/types";
 import { formatBytes, formatPercent } from "@/lib/format";
 
 const STATS_INTERVAL = 4000;
@@ -23,6 +25,10 @@ export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [pending, setPending] = useState<Record<string, ContainerAction>>({});
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [query, setQuery] = useState("");
+  const [stateFilter, setStateFilter] = useState<StateFilter>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const toastId = useRef(0);
   const pushToast = useCallback((kind: Toast["kind"], message: string) => {
@@ -117,10 +123,35 @@ export default function Dashboard() {
     };
   }, [containers, stats, overview]);
 
-  // Group by compose project.
+  const counts = useMemo(
+    () => ({
+      all: containers.length,
+      running: containers.filter((c) => c.state === "running").length,
+      stopped: containers.filter((c) => c.state !== "running").length,
+    }),
+    [containers],
+  );
+
+  // Apply search + state filter.
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return containers.filter((c) => {
+      if (stateFilter === "running" && c.state !== "running") return false;
+      if (stateFilter === "stopped" && c.state === "running") return false;
+      if (!q) return true;
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.image.toLowerCase().includes(q) ||
+        (c.project ?? "").toLowerCase().includes(q) ||
+        (c.service ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [containers, query, stateFilter]);
+
+  // Group filtered containers by compose project.
   const groups = useMemo(() => {
-    const map = new Map<string, typeof containers>();
-    for (const c of containers) {
+    const map = new Map<string, ContainerSummary[]>();
+    for (const c of filtered) {
       const key = c.project ?? "";
       const arr = map.get(key) ?? [];
       arr.push(c);
@@ -131,7 +162,14 @@ export default function Dashboard() {
       if (b === "") return -1;
       return a.localeCompare(b);
     });
-  }, [containers]);
+  }, [filtered]);
+
+  const selected = selectedId ? (containers.find((c) => c.id === selectedId) ?? null) : null;
+
+  const openDetail = useCallback((c: ContainerSummary) => {
+    setSelectedId(c.id);
+    setDetailOpen(true);
+  }, []);
 
   const loading = overview === null && error === null;
 
@@ -204,6 +242,18 @@ export default function Dashboard() {
 
         {/* Containers */}
         <section className="mt-8" aria-label="Containers">
+          {!loading && containers.length > 0 && (
+            <div className="mb-6">
+              <FilterBar
+                query={query}
+                onQuery={setQuery}
+                state={stateFilter}
+                onState={setStateFilter}
+                counts={counts}
+              />
+            </div>
+          )}
+
           {loading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -213,6 +263,10 @@ export default function Dashboard() {
           ) : containers.length === 0 && !error ? (
             <div className="text-muted-foreground rounded-xl border border-dashed py-16 text-center text-sm">
               No containers found on this host.
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-muted-foreground rounded-xl border border-dashed py-16 text-center text-sm">
+              No containers match your filters.
             </div>
           ) : (
             <div className="space-y-8">
@@ -231,6 +285,7 @@ export default function Dashboard() {
                         stats={stats[c.id]}
                         pending={pending[c.id] ?? null}
                         onAction={handleAction}
+                        onOpen={openDetail}
                       />
                     ))}
                   </div>
@@ -245,6 +300,14 @@ export default function Dashboard() {
           {overview ? `${overview.host.operatingSystem}` : "connecting…"}
         </footer>
       </main>
+
+      <ContainerDetail
+        container={selected}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        pending={selected ? (pending[selected.id] ?? null) : null}
+        onAction={handleAction}
+      />
 
       <Toaster toasts={toasts} />
     </TooltipProvider>

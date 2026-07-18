@@ -73,6 +73,43 @@ export interface DiskUsage {
   reclaimable: number;
 }
 
+export interface MountInfo {
+  type: string;
+  name: string | null;
+  source: string;
+  destination: string;
+  mode: string;
+  rw: boolean;
+}
+
+export interface NetworkAttachment {
+  name: string;
+  ipAddress: string;
+  gateway: string;
+  macAddress: string;
+  aliases: string[];
+}
+
+export interface ContainerDetail extends ContainerSummary {
+  command: string;
+  restartPolicy: string;
+  /** Env vars with values masked — keys only are meaningful/safe. */
+  env: { key: string; masked: string }[];
+  labels: { key: string; value: string }[];
+  mounts: MountInfo[];
+  networks: NetworkAttachment[];
+  /** Path(s) to the compose file that defined this container, if labelled. */
+  composeFiles: string[];
+  workingDir: string;
+  logPath: string | null;
+}
+
+export interface LogLine {
+  stream: "stdout" | "stderr";
+  timestamp: string;
+  text: string;
+}
+
 export type ContainerAction = "start" | "stop" | "restart";
 
 export interface ActionResult {

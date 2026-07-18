@@ -1,10 +1,12 @@
 import type {
   ActionResult,
   ContainerAction,
+  ContainerDetail,
   ContainerStats,
   ContainerSummary,
   DiskUsage,
   HostInfo,
+  LogLine,
 } from "@/lib/types";
 
 export interface Overview {
@@ -34,6 +36,24 @@ export async function fetchStats(
     await fetch(`/api/stats${qs}`, { signal }),
   );
   return data.stats;
+}
+
+export async function fetchDetail(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ContainerDetail> {
+  return asJson<ContainerDetail>(await fetch(`/api/containers/${id}`, { signal }));
+}
+
+export async function fetchLogs(
+  id: string,
+  tail = 400,
+  signal?: AbortSignal,
+): Promise<LogLine[]> {
+  const data = await asJson<{ lines: LogLine[] }>(
+    await fetch(`/api/containers/${id}/logs?tail=${tail}`, { signal }),
+  );
+  return data.lines;
 }
 
 export async function runAction(
