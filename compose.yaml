@@ -68,8 +68,10 @@ services:
       HOST: 0.0.0.0
       PORT: 4321
     ports:
-      # host:container — bound to loopback; expose via your tunnel/proxy.
-      - "127.0.0.1:${HELMPORT_PORT:-8087}:4321"
+      # host:container. By default binds all interfaces so it's reachable on
+      # your LAN. Set HELMPORT_BIND=127.0.0.1 to restrict to loopback and
+      # expose only through a reverse proxy / Cloudflare Tunnel.
+      - "${HELMPORT_BIND:-0.0.0.0}:${HELMPORT_PORT:-8087}:4321"
     security_opt:
       - no-new-privileges:true
     cap_drop:
