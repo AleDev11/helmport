@@ -1,0 +1,17 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import ContainerView from "@/components/dashboard/ContainerView.tsx";
+
+export const prerender = false;
+
+const { id } = Astro.params;
+
+// Basic guard: Docker IDs are hex. Bad ids fall back to the dashboard.
+if (!id || !/^[a-f0-9]{12,64}$/i.test(id)) {
+  return Astro.redirect("/");
+}
+---
+
+<Layout title="Container · Helmport">
+  <ContainerView id={id} client:load />
+</Layout>

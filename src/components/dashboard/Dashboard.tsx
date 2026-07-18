@@ -7,7 +7,6 @@ import { StatTile } from "./StatTile";
 import { DiskPanel } from "./DiskPanel";
 import { ContainerCard } from "./ContainerCard";
 import { ContainerCardSkeleton } from "./Skeletons";
-import { ContainerDetail } from "./ContainerDetail";
 import { FilterBar, type StateFilter } from "./FilterBar";
 import { Toaster, type Toast } from "./Toaster";
 import { fetchOverview, fetchStats, runAction, type Overview } from "./api";
@@ -27,8 +26,6 @@ export default function Dashboard() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
 
   const toastId = useRef(0);
   const pushToast = useCallback((kind: Toast["kind"], message: string) => {
@@ -164,11 +161,10 @@ export default function Dashboard() {
     });
   }, [filtered]);
 
-  const selected = selectedId ? (containers.find((c) => c.id === selectedId) ?? null) : null;
-
+  // Navigate to the container's detail page using Astro's animated view
+  // transition (dynamic import keeps this out of the SSR bundle).
   const openDetail = useCallback((c: ContainerSummary) => {
-    setSelectedId(c.id);
-    setDetailOpen(true);
+    void import("astro:transitions/client").then((m) => m.navigate(`/containers/${c.id}`));
   }, []);
 
   const loading = overview === null && error === null;
@@ -199,12 +195,14 @@ export default function Dashboard() {
         {/* Overview */}
         <section aria-label="Overview" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatTile
+            index={0}
             label="Containers"
             value={loading ? "—" : `${agg.running}/${agg.total}`}
             sub={loading ? undefined : `${agg.stopped} stopped`}
             icon={Boxes}
           />
           <StatTile
+            index={1}
             label="CPU load"
             value={loading ? "—" : formatPercent(agg.cpuPct / 100, 1)}
             sub={overview ? `${overview.host.ncpu} vCPU total` : undefined}
@@ -213,6 +211,7 @@ export default function Dashboard() {
             accent="text-chart-2"
           />
           <StatTile
+            index={2}
             label="Memory"
             value={loading ? "—" : formatBytes(agg.memUsed)}
             sub={agg.memTotal ? `of ${formatBytes(agg.memTotal)}` : undefined}
@@ -221,6 +220,7 @@ export default function Dashboard() {
             accent="text-chart-4"
           />
           <StatTile
+            index={3}
             label="Docker disk"
             value={loading ? "—" : formatBytes(overview?.disk.totalSize ?? 0)}
             sub={
@@ -295,19 +295,33 @@ export default function Dashboard() {
           )}
         </section>
 
-        <footer className="text-muted-foreground mt-12 border-t pt-6 text-center text-xs">
-          Helmport · read-optimised homelab dashboard ·{" "}
-          {overview ? `${overview.host.operatingSystem}` : "connecting…"}
+        <footer className="text-muted-foreground mt-12 flex flex-col items-center gap-1 border-t pt-6 text-center text-xs">
+          <p>
+            <span className="text-foreground font-medium">Helmport</span> · homelab dashboard
+            {overview ? ` · ${overview.host.operatingSystem}` : ""}
+          </p>
+          <p>
+            Built by{" "}
+            <a
+              href="https://github.com/AleDev11"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="hover:text-foreground underline underline-offset-2"
+            >
+              AleDev11
+            </a>{" "}
+            ·{" "}
+            <a
+              href="https://github.com/AleDev11/helmport"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="hover:text-foreground underline underline-offset-2"
+            >
+              github.com/AleDev11/helmport
+            </a>
+          </p>
         </footer>
       </main>
-
-      <ContainerDetail
-        container={selected}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-        pending={selected ? (pending[selected.id] ?? null) : null}
-        onAction={handleAction}
-      />
 
       <Toaster toasts={toasts} />
     </TooltipProvider>

@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { motion } from "motion/react";
 import { Card } from "@/components/ui/card";
 import { Meter } from "@/components/ui/meter";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,7 @@ interface StatTileProps {
   meter?: number;
   meterTone?: "primary" | "success" | "warning" | "destructive" | "auto";
   accent?: string;
+  index?: number;
 }
 
 export function StatTile({
@@ -22,10 +24,16 @@ export function StatTile({
   meter,
   meterTone = "auto",
   accent = "text-primary",
+  index = 0,
 }: StatTileProps) {
   return (
-    <Card className="gap-0 p-5">
-      <div className="flex items-start justify-between gap-3">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: index * 0.06, ease: "easeOut" }}
+    >
+      <Card className="gap-0 p-5">
+        <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
             {label}
@@ -36,10 +44,11 @@ export function StatTile({
           <Icon className="size-4.5" strokeWidth={2} />
         </span>
       </div>
-      {typeof meter === "number" ? (
-        <Meter value={meter} tone={meterTone} className="mt-4" aria-label={label} />
-      ) : null}
-      {sub ? <p className="text-muted-foreground mt-3 text-xs">{sub}</p> : null}
-    </Card>
+        {typeof meter === "number" ? (
+          <Meter value={meter} tone={meterTone} className="mt-4" aria-label={label} />
+        ) : null}
+        {sub ? <p className="text-muted-foreground mt-3 text-xs">{sub}</p> : null}
+      </Card>
+    </motion.div>
   );
 }

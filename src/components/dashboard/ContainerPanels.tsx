@@ -1,172 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Play,
-  Square,
-  RotateCw,
-  Loader2,
-  Network,
-  HardDrive,
-  ScrollText,
-  Info,
-  RefreshCw,
-  Copy,
-  Check,
-} from "lucide-react";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Loader2, Network, RefreshCw, Copy, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { StatusDot } from "./StatusDot";
-import { fetchDetail, fetchLogs } from "./api";
-import type {
-  ContainerAction,
-  ContainerDetail as Detail,
-  ContainerSummary,
-  LogLine,
-} from "@/lib/types";
+import { fetchLogs } from "./api";
+import type { ContainerDetail as Detail, LogLine } from "@/lib/types";
 import { formatUptime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const LOGS_POLL = 3000;
 
-interface Props {
-  container: ContainerSummary | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  pending: ContainerAction | null;
-  onAction: (id: string, action: ContainerAction) => void;
-}
-
-export function ContainerDetail({ container, open, onOpenChange, pending, onAction }: Props) {
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [tab, setTab] = useState("overview");
-  const id = container?.id ?? null;
-  // Prefer the live summary state (kept fresh by the list) over the inspect
-  // snapshot, so the header updates right after a lifecycle action.
-  const running = (container?.state ?? detail?.state) === "running";
-
-  useEffect(() => {
-    if (!open || !id) return;
-    setDetail(null);
-    setTab("overview");
-    const ctrl = new AbortController();
-    fetchDetail(id, ctrl.signal)
-      .then(setDetail)
-      .catch(() => {});
-    return () => ctrl.abort();
-  }, [open, id]);
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="p-0">
-        {container && (
-          <>
-            <SheetHeader className="pr-12">
-              <div className="flex items-center gap-2.5">
-                <StatusDot state={container.state} />
-                <SheetTitle className="truncate">{container.name}</SheetTitle>
-              </div>
-              <SheetDescription className="truncate font-mono text-xs">
-                {container.image}
-              </SheetDescription>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {running ? (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={pending !== null}
-                      onClick={() => onAction(container.id, "restart")}
-                    >
-                      {pending === "restart" ? (
-                        <Loader2 className="animate-spin" />
-                      ) : (
-                        <RotateCw />
-                      )}
-                      Restart
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-destructive"
-                      disabled={pending !== null}
-                      onClick={() => onAction(container.id, "stop")}
-                    >
-                      {pending === "stop" ? <Loader2 className="animate-spin" /> : <Square />}
-                      Stop
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    size="sm"
-                    disabled={pending !== null}
-                    onClick={() => onAction(container.id, "start")}
-                  >
-                    {pending === "start" ? <Loader2 className="animate-spin" /> : <Play />}
-                    Start
-                  </Button>
-                )}
-              </div>
-            </SheetHeader>
-
-            <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-              <div className="px-6 pt-4">
-                <TabsList>
-                  <TabsTrigger value="overview">
-                    <Info className="size-3.5" /> Overview
-                  </TabsTrigger>
-                  <TabsTrigger value="logs">
-                    <ScrollText className="size-3.5" /> Logs
-                  </TabsTrigger>
-                  <TabsTrigger value="volumes">
-                    <HardDrive className="size-3.5" /> Volumes
-                  </TabsTrigger>
-                  <TabsTrigger value="networks">
-                    <Network className="size-3.5" /> Networks
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-                <TabsContent value="overview">
-                  <OverviewTab detail={detail} container={container} />
-                </TabsContent>
-                <TabsContent value="logs" className="h-full">
-                  {open && tab === "logs" && id && <LogsTab id={id} />}
-                </TabsContent>
-                <TabsContent value="volumes">
-                  <VolumesTab detail={detail} />
-                </TabsContent>
-                <TabsContent value="networks">
-                  <NetworksTab detail={detail} />
-                </TabsContent>
-              </div>
-            </Tabs>
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
-  );
-}
-
 /* --------------------------------- Overview -------------------------------- */
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-3 gap-3 py-2 text-sm">
+    <div className="grid grid-cols-3 gap-3 py-2.5 text-sm">
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="col-span-2 min-w-0 break-words">{children}</dd>
     </div>
   );
 }
 
-function OverviewTab({ detail, container }: { detail: Detail | null; container: ContainerSummary }) {
+export function OverviewTab({ detail }: { detail: Detail | null }) {
   if (!detail) return <LoadingBlock />;
   return (
     <div className="divide-border divide-y">
@@ -234,7 +88,7 @@ function OverviewTab({ detail, container }: { detail: Detail | null; container: 
 
 /* ----------------------------------- Logs ---------------------------------- */
 
-function LogsTab({ id }: { id: string }) {
+export function LogsTab({ id }: { id: string }) {
   const [lines, setLines] = useState<LogLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [autoscroll, setAutoscroll] = useState(true);
@@ -242,8 +96,7 @@ function LogsTab({ id }: { id: string }) {
 
   const load = useCallback(async () => {
     try {
-      const l = await fetchLogs(id, 500);
-      setLines(l);
+      setLines(await fetchLogs(id, 500));
     } catch {
       /* keep previous */
     } finally {
@@ -264,7 +117,7 @@ function LogsTab({ id }: { id: string }) {
   }, [lines, autoscroll]);
 
   return (
-    <div className="flex h-full min-h-[50vh] flex-col">
+    <div className="flex h-full min-h-[55vh] flex-col">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-muted-foreground text-xs">
           {loading ? "Loading…" : `${lines.length} lines · last 500`}
@@ -313,7 +166,7 @@ function LogsTab({ id }: { id: string }) {
 
 /* --------------------------------- Volumes --------------------------------- */
 
-function VolumesTab({ detail }: { detail: Detail | null }) {
+export function VolumesTab({ detail }: { detail: Detail | null }) {
   if (!detail) return <LoadingBlock />;
   if (detail.mounts.length === 0)
     return <p className="text-muted-foreground text-sm">No mounts or volumes.</p>;
@@ -342,7 +195,7 @@ function VolumesTab({ detail }: { detail: Detail | null }) {
 
 /* --------------------------------- Networks -------------------------------- */
 
-function NetworksTab({ detail }: { detail: Detail | null }) {
+export function NetworksTab({ detail }: { detail: Detail | null }) {
   if (!detail) return <LoadingBlock />;
   if (detail.networks.length === 0)
     return <p className="text-muted-foreground text-sm">Not attached to any network.</p>;
@@ -393,7 +246,7 @@ function NetRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function LoadingBlock() {
+export function LoadingBlock() {
   return (
     <div className="text-muted-foreground flex items-center gap-2 py-8 text-sm">
       <Loader2 className="size-4 animate-spin" /> Loading…

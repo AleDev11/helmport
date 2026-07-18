@@ -1,5 +1,6 @@
 ---
 import "@/styles/global.css";
+import { ClientRouter } from "astro:transitions";
 
 interface Props {
   title?: string;
@@ -22,6 +23,7 @@ const {
     <meta name="robots" content="noindex, nofollow" />
     <title>{title}</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <ClientRouter />
     {/* No-flash theme: apply stored preference before first paint. */}
     <script is:inline>
       (function () {

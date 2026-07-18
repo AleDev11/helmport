@@ -44,7 +44,7 @@ Exposing the Docker socket is equivalent to giving root on the host. Helmport is
 ## 🚀 Quick start (Docker Compose)
 
 ```bash
-git clone https://github.com/<you>/helmport.git
+git clone https://github.com/AleDev11/helmport.git
 cd helmport
 cp .env.example .env      # optional: change HELMPORT_PORT
 docker compose up -d --build

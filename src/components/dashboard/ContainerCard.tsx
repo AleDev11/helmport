@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "motion/react";
 import {
   MoreVertical,
   Play,
@@ -52,23 +53,30 @@ export function ContainerCard({ container, stats, pending, onAction, onOpen }: P
   const memPct = stats?.memPercent ?? 0;
 
   return (
-    <Card
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpen(container)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen(container);
-        }
-      }}
-      className={cn(
-        "group relative cursor-pointer gap-0 overflow-hidden p-4 transition-colors",
-        "hover:border-primary/40 focus-visible:border-primary focus-visible:ring-ring/40 focus-visible:ring-[3px] focus-visible:outline-none",
-        !running && "opacity-90",
-      )}
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      whileHover={{ y: -2 }}
     >
-      {/* Header */}
+      <Card
+        role="button"
+        tabIndex={0}
+        onClick={() => onOpen(container)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOpen(container);
+          }
+        }}
+        className={cn(
+          "group relative cursor-pointer gap-0 overflow-hidden p-4 transition-colors",
+          "hover:border-primary/40 focus-visible:border-primary focus-visible:ring-ring/40 focus-visible:ring-[3px] focus-visible:outline-none",
+          !running && "opacity-90",
+        )}
+      >
+        {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <StatusDot state={container.state} />
@@ -171,8 +179,9 @@ export function ContainerCard({ container, stats, pending, onAction, onOpen }: P
             </TooltipContent>
           </Tooltip>
         )}
-      </div>
-    </Card>
+        </div>
+      </Card>
+    </motion.div>
   );
 }
 
