@@ -8,12 +8,20 @@ const ALLOWED: ContainerAction[] = ["start", "stop", "restart"];
 // Docker IDs are 64-char hex; accept short (12) form too.
 const ID_RE = /^[a-f0-9]{12,64}$/i;
 
-/** Reject cross-site POSTs (defence-in-depth alongside Astro's checkOrigin). */
+/**
+ * Reject cross-site POSTs (defence-in-depth alongside Astro's checkOrigin).
+ * We compare the browser Origin against the Host it actually addressed —
+ * NOT request.url, whose port reflects the container's internal port when
+ * behind a Docker port mapping or reverse proxy. `x-forwarded-host` takes
+ * precedence so it also works behind a tunnel / reverse proxy.
+ */
 function sameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return true; // non-browser client (curl, server-side)
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  if (!host) return true;
   try {
-    return new URL(origin).host === new URL(request.url).host;
+    return new URL(origin).host === host;
   } catch {
     return false;
   }

@@ -72,7 +72,7 @@ export function ContainerCard({ container, stats, pending, onAction }: Props) {
           </div>
         </div>
 
-        <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
